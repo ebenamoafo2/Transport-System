@@ -1,15 +1,19 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
-	"gihub.com/ebenamoafo2/transport/ride/configs"
+	"github.com/ebenamoafo2/transport/ride/configs"
 )
 
 func main() {
-	cfg, err := configs.LoadConfig("../configs/config.yml")
+	configPath := flag.String("config", "configs/config.yml", "path to YAML configuration")
+	flag.Parse()
+	cfg, err := configs.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
@@ -22,6 +26,9 @@ func main() {
 	server := &http.Server{
 		Addr:        fmt.Sprintf(":%d", cfg.Server.Port),
 		IdleTimeout: cfg.Server.IdleTimeout,
+		ReadTimeout: time.Duration(cfg.Server.ReadTimeoutSec),
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeoutSec),
+		
 	}
 	log.Printf("Loaded config: %+v", safe)
 	log.Printf("Starting server on port %d", cfg.Server.Port)

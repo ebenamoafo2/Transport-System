@@ -1,4 +1,4 @@
-module gihub.com/ebenamoafo2/transport/ride
+module github.com/ebenamoafo2/transport/ride
 
 go 1.26.5
 
