@@ -30,6 +30,10 @@ func main() {
 	mux := http.NewServeMux()
 	//Root endpoint: a friendly hello
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		fmt.Fprintln(w, "Hello from the ride service!")
 	})
 
