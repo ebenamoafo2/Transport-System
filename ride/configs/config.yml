@@ -8,6 +8,7 @@ database:
   host: "mysql.internal"
   port: 3306
   user: "ride_user"
+  name: "transportdb"
   password: "" # left blank; provide via DB_PASSWORD  name: "transportdb"
   max_open_conns: 20
   max_idle_conns: 5
