@@ -1,0 +1,85 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+
+	"github.com/ebenamoafo2/transport/ride/internal/models"
+	"github.com/ebenamoafo2/transport/ride/internal/ports"
+)
+
+type sqlAssignmentRepository struct {
+	db *sql.DB
+}
+
+func NewSQLAssignmentRepository(db *sql.DB) ports.AssignmentRepository {
+	return &sqlAssignmentRepository{db: db}
+}
+
+func (r *sqlAssignmentRepository) Save(ctx context.Context, a models.Assignment) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO assignments (id, vehicle_id, route_id, starts_at, status)
+		VALUES (?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		    vehicle_id = VALUES(vehicle_id),
+		    route_id   = VALUES(route_id),
+		    starts_at  = VALUES(starts_at),
+		    status     = VALUES(status)`,
+		a.ID, a.VehicleID, a.RouteID, a.StartsAt, a.Status,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	rows, _ := res.RowsAffected()
+	isNew := rows == 1 // MySQL returns 1 for insert, 2 for update
+
+	return isNew, nil
+}
+
+func (r *sqlAssignmentRepository) FindByID(ctx context.Context, id string) (models.Assignment, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, vehicle_id, route_id, starts_at, status
+		FROM assignments WHERE id = ?`, id,
+	)
+
+	var a models.Assignment
+	err := row.Scan(&a.ID, &a.VehicleID, &a.RouteID, &a.StartsAt, &a.Status)
+	if err != nil {
+		//  err == sql.ErrNoRows
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Assignment{}, nil // caller decides how to handle "not found"
+		}
+		return models.Assignment{}, err
+	}
+	return a, nil
+}
+
+func (r *sqlAssignmentRepository) FindAll(ctx context.Context, status *string) ([]models.Assignment, error) {
+	q := `
+			SELECT id, vehicle_id, route_id, starts_at, status
+			FROM assignments`
+	args := []any{}
+
+	if status != nil {
+		q += ` WHERE status = ?`
+		args = append(args, *status)
+	}
+	rows, err := r.db.QueryContext(ctx, q, args)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assignments []models.Assignment
+	for rows.Next() {
+		var a models.Assignment
+		if err := rows.Scan(&a.ID, &a.VehicleID, &a.RouteID, &a.StartsAt, &a.Status); err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, a)
+	}
+	return assignments, rows.Err()
+}
