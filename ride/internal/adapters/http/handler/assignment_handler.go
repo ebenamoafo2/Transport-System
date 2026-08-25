@@ -34,7 +34,7 @@ func (h *AssignmentHandler) GetAssignment(c *gin.Context, id string) {
 
 func notImplemented(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "not implemented",
+		"error":   "not implemented",
 		"message": "This endpoint is not yet implemented.",
 	})
 }

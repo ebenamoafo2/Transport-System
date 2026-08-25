@@ -45,7 +45,6 @@ func main() {
 	db.SetConnMaxLifetime(time.Duration(cfg.Database.ConnMaxLifetime) * time.Second)
 	db.SetConnMaxIdleTime(time.Duration(cfg.Database.ConnMaxIdleTime) * time.Second)
 
-
 	assignmentRepo := repository.NewSQLAssignmentRepository(db)
 	if err := httpserver.Run(cfg.Server, assignmentRepo); err != nil {
 		log.Fatalf("application run failed: %v", err)

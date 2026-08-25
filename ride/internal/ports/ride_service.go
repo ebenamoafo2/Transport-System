@@ -6,7 +6,6 @@ import (
 	"github.com/ebenamoafo2/transport/ride/internal/models"
 )
 
-
 type AssignmentService interface {
 	Save(ctx context.Context, a models.Assignment) (models.Assignment, error)
 	GetByID(ctx context.Context, id string) (models.Assignment, error)
