@@ -5,38 +5,42 @@ package test_containers
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"sync"
+	"time"
 
 	"github.com/moby/moby/api/types/container"
 	mobycontainer "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
-	"github.com/rs/zerolog/log"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 var (
-	mysqlOnce sync.Once
-	mysqlHost string
-	mysqlPort string
+	mysqlOnce      sync.Once
+	mysqlContainer testcontainers.Container
+	mysqlHost      string
+	mysqlPort      string
+	mysqlErr       error
 )
 
 type testContainerRunner struct {
-	servicePort       int
-	name              string
-	image             string
-	exposedPorts      []string
-	env               map[string]string
+	servicePort        int
+	name               string
+	image              string
+	exposedPorts       []string
+	env                map[string]string
 	hostConfigModifier func(hostConfig *mobycontainer.HostConfig)
 }
 
 func (r testContainerRunner) Run(ctx context.Context) (testcontainers.Container, error) {
+	timeout := 3 * time.Minute
 	containerReq := testcontainers.ContainerRequest{
 		Name:         r.name,
 		Image:        r.image,
 		ExposedPorts: r.exposedPorts,
 		Env:          r.env,
-		WaitingFor:   wait.ForListeningPort(fmt.Sprintf("%d/tcp", r.servicePort)),
+		WaitingFor:   wait.ForListeningPort(fmt.Sprintf("%d/tcp", r.servicePort)).WithStartupTimeout(timeout),
 		HostConfigModifier: func(hostConfig *mobycontainer.HostConfig) {
 			if r.hostConfigModifier != nil {
 				r.hostConfigModifier(hostConfig)
@@ -50,7 +54,7 @@ func (r testContainerRunner) Run(ctx context.Context) (testcontainers.Container,
 	})
 }
 
-func GetMySqlContainer(ctx context.Context, db, user, pass string, port *int) (string, string) {
+func GetMySqlContainer(ctx context.Context, db, user, pass string, port *int) (string, string, error) {
 	mysqlOnce.Do(func() {
 		c, err := testContainerRunner{
 			servicePort:  3306,
@@ -65,25 +69,29 @@ func GetMySqlContainer(ctx context.Context, db, user, pass string, port *int) (s
 			},
 			hostConfigModifier: mysqlHostConfigModifier(port),
 		}.Run(ctx)
+		mysqlContainer = c
 
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to start mysql container")
+			mysqlErr = fmt.Errorf("failed to start mysql container: %w", err)
+			return
 		}
 
 		mp, err := c.MappedPort(ctx, "3306/tcp")
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to get mapped port for mysql container")
+			mysqlErr = fmt.Errorf("failed to get mapped port for mysql container: %w", err)
+			return
 		}
 
 		h, err := c.Host(ctx)
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to get host for mysql container")
+			mysqlErr = fmt.Errorf("failed to get host for mysql container: %w", err)
+			return
 		}
 
 		mysqlHost = h
 		mysqlPort = mp.Port()
 	})
-	return mysqlHost, mysqlPort
+	return mysqlHost, mysqlPort, mysqlErr
 }
 
 func mysqlHostConfigModifier(port *int) func(hostConfig *container.HostConfig) {
@@ -91,10 +99,9 @@ func mysqlHostConfigModifier(port *int) func(hostConfig *container.HostConfig) {
 		hostConfig.AutoRemove = true
 		if port != nil {
 			hostConfig.PortBindings = network.PortMap{
-				"3306/tcp
-				": []network.PortBinding{
+				network.MustParsePort("3306/tcp"): []network.PortBinding{
 					{
-						HostIP:   "0.0.0.0",
+						HostIP:   netip.MustParseAddr("0.0.0.0"),
 						HostPort: fmt.Sprintf("%d", *port),
 					},
 				},
